@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Holley Jet Tuner — PRO</title>
+<link rel="manifest" href="manifest.json">
+<meta name="theme-color" content="#27ae60">
+<style>
+  :root{--bg:#0b0c10;--card:#121418;--ink:#e8e8e8;--muted:#a9b0b7;--accent:#27ae60;--danger:#ff6b6b;--warn:#f1c40f;}
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);font-family:system-ui,-apple-system,Segoe UI,Roboto,Ubuntu,Arial,sans-serif}
+  .wrap{max-width:1080px;margin:0 auto;padding:18px}
+  .card{background:var(--card);border:1px solid #22262c;border-radius:18px;padding:16px;margin:12px 0;box-shadow:0 6px 20px rgba(0,0,0,.25)}
+  h1{font-size:1.35rem;margin:.5rem 0 0.25rem}
+  h2{font-size:1.05rem;margin:.35rem 0 .5rem;color:var(--muted)}
+  label{display:block;font-size:.95rem;margin:.5rem 0 .35rem;color:var(--muted)}
+  input,select{width:100%;padding:12px;border-radius:12px;border:1px solid #2a2f36;background:#0f1115;color:var(--ink);font-size:1rem}
+  .grid{display:grid;gap:12px}
+  @media(min-width:1060px){.grid.cols-3{grid-template-columns:1fr 1fr 1fr}}
+  @media(min-width:720px){.grid.cols-2{grid-template-columns:1fr 1fr}}
+  .row{display:flex;gap:10px;flex-wrap:wrap}
+  .btn{appearance:none;cursor:pointer;border:0;border-radius:14px;padding:12px 16px;font-weight:600}
+  .btn.primary{background:var(--accent);color:#08150f}
+  .btn.ghost{background:#0f1115;color:var(--ink);border:1px solid #2a2f36}
+  .pill{display:inline-flex;align-items:center;gap:.5ch;padding:.35rem .6rem;border-radius:999px;background:#0f1115;border:1px solid #2a2f36;color:var(--muted);font-size:.85rem}
+  .result{font-size:1.05rem;line-height:1.55}
+  .good{color:#6bd38e} .warn{color:var(--warn)} .bad{color:var(--danger)}
+  .num{font-variant-numeric:tabular-nums}
+  .hr{height:1px;background:#20242b;margin:10px 0}
+  details{border:1px solid #2a2f36;border-radius:12px;padding:10px;background:#0f1115}
+  summary{cursor:pointer;color:var(--muted);font-weight:600}
+  .pv-banner{padding:10px 12px;border-radius:12px;border:1px solid #2a2f36;display:flex;align-items:center;gap:10px}
+  .pv-open{background:rgba(39,174,96,.15)} .pv-closed{background:rgba(255,107,107,.12)}
+</style>
+</head>
+<body>
+  <div class="wrap">
+    <h1>Holley Jet Tuner <span class="pill">PRO</span></h1>
+
+    <div class="card">
+      <div class="row">
+        <input id="presetName" placeholder="Preset name (e.g., 3310 street 1200ft)" style="flex:1 1 260px"/>
+        <button class="btn primary" onclick="savePreset()">Save / Update</button>
+        <button class="btn ghost" onclick="loadPreset()">Load</button>
+        <button class="btn ghost" onclick="deletePreset()">Delete</button>
+        <select id="presetList" style="min-width:220px"></select>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Core Inputs</h2>
+      <div class="grid cols-3">
+        <div>
+          <label>Measured AFR (wideband)</label>
+          <input id="afrMeasured" type="number" step="0.01" placeholder="e.g., 12.8" />
+        </div>
+        <div>
+          <label>Target AFR</label>
+          <input id="afrTarget" type="number" step="0.01" placeholder="e.g., 12.5 WOT, 13.0, etc." />
+        </div>
+        <div>
+          <label>Operating Circuit</label>
+          <select id="circuit">
+            <option value="main">Main only (PV closed)</option>
+            <option value="wot" selected>WOT (PV open)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="grid cols-2" style="margin-top:8px">
+        <div>
+          <label>Current Primary Jet</label>
+          <input id="jetPri" type="number" step="1" placeholder="e.g., 72" />
+        </div>
+        <div>
+          <label>Current Secondary Jet (optional)</label>
+          <input id="jetSec" type="number" step="1" placeholder="e.g., 80" />
+        </div>
+      </div>
+
+      <details style="margin-top:12px">
+        <summary>Advanced Circuit Parameters (optional)</summary>
+        <div class="grid cols-3" style="margin-top:8px">
+          <div>
+            <label>PVCR diameter (inches, each)</label>
+            <input id="pvcrDiaIn" type="number" step="0.001" placeholder="e.g., 0.055" />
+          </div>
+          <div>
+            <label>PVCR count</label>
+            <input id="pvcrCount" type="number" step="1" placeholder="2" />
+          </div>
+          <div>
+            <label>HSAB diameter (inches)</label>
+            <input id="hsabDiaIn" type="number" step="0.001" placeholder="e.g., 0.028" />
+          </div>
+        </div>
+        <div class="grid cols-3" style="margin-top:8px">
+          <div>
+            <label>PVCR sensitivity (AFR per 0.001")</label>
+            <input id="pvcrSens" type="number" step="0.01" value="-0.20" />
+            <small>Negative = richer as PVCR gets larger.</small>
+          </div>
+          <div>
+            <label>HSAB sensitivity (AFR per 0.001")</label>
+            <input id="hsabSens" type="number" step="0.01" value="+0.10" />
+            <small>Positive = leaner as HSAB gets larger.</small>
+          </div>
+          <div>
+            <label>Jet sensitivity (AFR per 1 jet size)</label>
+            <input id="jetSens" type="number" step="0.01" value="0.20" />
+          </div>
+        </div>
+      </details>
+
+      <details style="margin-top:12px">
+        <summary>Environment (altitude / temperature)</summary>
+        <div class="grid cols-3" style="margin-top:8px">
+          <div>
+            <label>Elevation (ft)</label>
+            <input id="elevFt" type="number" step="1" placeholder="e.g., 1200" />
+          </div>
+          <div>
+            <label>Air Temp (°F)</label>
+            <input id="airTempF" type="number" step="1" placeholder="e.g., 85" />
+          </div>
+          <div>
+            <label>Apply env. correction</label>
+            <select id="applyEnv"><option value="yes" selected>Yes</option><option value="no">No</option></select>
+          </div>
+        </div>
+        <small>Uses a simple standard‑atmosphere model (sea level 59°F baseline).</small>
+      </details>
+
+      <details style="margin-top:12px" open>
+        <summary>Vacuum helper & Power Valve window</summary>
+        <div class="grid cols-3" style="margin-top:8px">
+          <div>
+            <label>Vacuum at idle (inHg)</label>
+            <input id="vacIdle" type="number" step="0.1" placeholder="e.g., 12.0" />
+          </div>
+          <div>
+            <label>Vacuum at 2000 RPM (inHg)</label>
+            <input id="vac2000" type="number" step="0.1" placeholder="e.g., 16.0" />
+          </div>
+          <div>
+            <label>Your current PV rating (inHg)</label>
+            <input id="pvRating" type="number" step="0.5" placeholder="e.g., 6.5" />
+          </div>
+        </div>
+        <div class="grid cols-2" style="margin-top:8px">
+          <div>
+            <label>PV window mode</label>
+            <select id="pvMode">
+              <option value="auto" selected>Auto (use vac@2000 & PV rating)</option>
+              <option value="forceOpen">Force OPEN (what‑if)</option>
+              <option value="forceClosed">Force CLOSED (what‑if)</option>
+            </select>
+          </div>
+          <div class="pv-banner pv-closed" id="pvBanner"><b>PV likely CLOSED</b> at 2000 RPM</div>
+        </div>
+        <small>PV ≈ idle vacuum × 2/3; or ≈ cruise vacuum − 1–2 inHg.</small>
+      </details>
+
+      <div class="grid cols-2" style="margin-top:12px">
+        <div>
+          <label>Clamp jet range <small>(typical 40–99)</small></label>
+          <input id="minJet" type="number" step="1" value="40" /> –
+          <input id="maxJet" type="number" step="1" value="99" />
+        </div>
+        <div>
+          <label>Result rounding</label>
+          <select id="rounding">
+            <option value="nearest" selected>Nearest whole jet</option>
+            <option value="floor">Round down</option>
+            <option value="ceil">Round up</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="row" style="margin-top:12px">
+        <button class="btn primary" onclick="calc()">Calculate</button>
+        <button class="btn ghost" onclick="resetForm()">Reset</button>
+        <button id="installBtn" class="btn primary" style="display:none">Install App</button>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Results</h2>
+      <div id="results" class="result">Enter values and tap <b>Calculate</b>.</div>
+    </div>
+  </div>
+
+<script>
+// PWA setup (HTTPS or localhost required for full installability)
+if ("serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("service-worker.js"));
+}
+
+const $ = (id)=>document.getElementById(id);
+const clamp = (v,min,max)=>Math.max(min, Math.min(max, v));
+const toNum = (el)=>{const v = parseFloat(el.value); return Number.isFinite(v)? v : NaN;};
+
+function rounding(mode, val){
+  if(mode==="floor") return Math.floor(val);
+  if(mode==="ceil") return Math.ceil(val);
+  return Math.round(val);
+}
+
+// Standard atmosphere density ratio vs sea level (59°F)
+function densityRatio(elevFt, airTempF){
+  if(!Number.isFinite(elevFt) || !Number.isFinite(airTempF)) return 1.0;
+  const h = elevFt * 0.3048;
+  const T0 = 288.15, P0 = 101325, L = 0.0065, g = 9.80665, R = 287.058;
+  const T = (airTempF - 32) * 5/9 + 273.15;
+  const P = P0 * Math.pow(1 - (L*h)/T0, g/(R*L));
+  const rho = P/(R*T);
+  const rho0 = 1.225;
+  return rho / rho0;
+}
+
+function loadPresetList(){
+  const raw = localStorage.getItem("holleyJetPresets");
+  const list = raw ? JSON.parse(raw) : [];
+  const sel = $("presetList");
+  sel.innerHTML = "";
+  list.forEach(p=>{
+    const opt = document.createElement("option");
+    opt.value = p.name; opt.textContent = p.name;
+    sel.appendChild(opt);
+  });
+}
+
+function savePreset(){
+  const name = $("presetName").value.trim();
+  if(!name){ alert("Enter a preset name."); return; }
+  const data = {
+    name,
+    afrTarget: $("afrTarget").value,
+    jetPri: $("jetPri").value,
+    jetSec: $("jetSec").value,
+    circuit: $("circuit").value,
+    pvcrDiaIn: $("pvcrDiaIn").value,
+    pvcrCount: $("pvcrCount").value,
+    hsabDiaIn: $("hsabDiaIn").value,
+    pvcrSens: $("pvcrSens").value,
+    hsabSens: $("hsabSens").value,
+    jetSens: $("jetSens").value,
+    elevFt: $("elevFt").value,
+    airTempF: $("airTempF").value,
+    applyEnv: $("applyEnv").value,
+    vacIdle: $("vacIdle").value,
+    vac2000: $("vac2000").value,
+    pvRating: $("pvRating").value,
+    pvMode: $("pvMode").value,
+    minJet: $("minJet").value,
+    maxJet: $("maxJet").value,
+    rounding: $("rounding").value
+  };
+  const raw = localStorage.getItem("holleyJetPresets");
+  const list = raw ? JSON.parse(raw) : [];
+  const idx = list.findIndex(p=>p.name===name);
+  if(idx>=0) list[idx]=data; else list.push(data);
+  localStorage.setItem("holleyJetPresets", JSON.stringify(list));
+  loadPresetList();
+  alert("Preset saved.");
+}
+
+function loadPreset(){
+  const sel = $("presetList");
+  const name = sel.value || $("presetName").value.trim();
+  if(!name){ alert("Pick a preset from the list or enter its name."); return; }
+  const raw = localStorage.getItem("holleyJetPresets");
+  const list = raw ? JSON.parse(raw) : [];
+  const p = list.find(x=>x.name===name);
+  if(!p){ alert("Preset not found."); return; }
+  $("presetName").value = p.name||"";
+  $("afrTarget").value = p.afrTarget||"";
+  $("jetPri").value = p.jetPri||"";
+  $("jetSec").value = p.jetSec||"";
+  $("circuit").value = p.circuit||"wot";
+  $("pvcrDiaIn").value = p.pvcrDiaIn||"";
+  $("pvcrCount").value = p.pvcrCount||"";
+  $("hsabDiaIn").value = p.hsabDiaIn||"";
+  $("pvcrSens").value = p.pvcrSens||"-0.20";
+  $("hsabSens").value = p.hsabSens||"+0.10";
+  $("jetSens").value = p.jetSens||"0.20";
+  $("elevFt").value = p.elevFt||"";
+  $("airTempF").value = p.airTempF||"";
+  $("applyEnv").value = p.applyEnv||"yes";
+  $("vacIdle").value = p.vacIdle||"";
+  $("vac2000").value = p.vac2000||"";
+  $("pvRating").value = p.pvRating||"";
+  $("pvMode").value = p.pvMode||"auto";
+  $("minJet").value = p.minJet||"40";
+  $("maxJet").value = p.maxJet||"99";
+  $("rounding").value = p.rounding||"nearest";
+  updatePvBanner();
+  alert("Preset loaded.");
+}
+
+function deletePreset(){
+  const sel = $("presetList");
+  const name = sel.value || $("presetName").value.trim();
+  if(!name){ alert("Select or enter a preset to delete."); return; }
+  const raw = localStorage.getItem("holleyJetPresets");
+  const list = raw ? JSON.parse(raw) : [];
+  const idx = list.findIndex(p=>p.name===name);
+  if(idx<0){ alert("Preset not found."); return; }
+  if(!confirm(`Delete preset "${name}"?`)) return;
+  list.splice(idx,1);
+  localStorage.setItem("holleyJetPresets", JSON.stringify(list));
+  loadPresetList();
+  alert("Deleted.");
+}
+
+function updatePvBanner(){
+  const banner = $("pvBanner");
+  const mode = $("pvMode").value;
+  const vac2000 = toNum($("vac2000"));
+  const pvRating = toNum($("pvRating"));
+  let open = false;
+  if(mode==="forceOpen") open = true;
+  else if(mode==="forceClosed") open = false;
+  else {
+    if(Number.isFinite(vac2000) && Number.isFinite(pvRating)){
+      open = (vac2000 < pvRating);
+    } else open = false;
+  }
+  banner.classList.remove("pv-open","pv-closed");
+  banner.classList.add(open? "pv-open":"pv-closed");
+  banner.innerHTML = `<b>PV likely ${open? "OPEN":"CLOSED"}</b> at 2000 RPM`;
+}
+["pvMode","vac2000","pvRating"].forEach(id=>{
+  document.addEventListener("input", (e)=>{ if(e.target && e.target.id===id) updatePvBanner(); });
+});
+
+function calc(){
+  const afrM = toNum($("afrMeasured"));
+  const afrT = toNum($("afrTarget"));
+  const jetP = parseInt($("jetPri").value,10);
+  const jetS = $("jetSec").value ? parseInt($("jetSec").value,10) : null;
+  const sensJet = parseFloat($("jetSens").value)||0.20;
+  const jmin = parseInt($("minJet").value||"40",10);
+  const jmax = parseInt($("maxJet").value||"99",10);
+  const roundingMode = $("rounding").value;
+
+  if(!Number.isFinite(afrM) || !Number.isFinite(afrT) || !Number.isFinite(jetP)){
+    $("results").innerHTML = '<span class="bad">Please enter Measured AFR, Target AFR, and Primary jet.</span>';
+    return;
+  }
+
+  const pvcrDia = toNum($("pvcrDiaIn"));
+  const pvcrCount = parseInt($("pvcrCount").value,10) || 0;
+  const hsabDia = toNum($("hsabDiaIn"));
+  const pvcrSens = parseFloat($("pvcrSens").value)||0;
+  const hsabSens = parseFloat($("hsabSens").value)||0;
+  const circuitSel = $("circuit").value;
+
+  const applyEnv = $("applyEnv").value==="yes";
+  const elevFt = toNum($("elevFt"));
+  const airTempF = toNum($("airTempF"));
+  const rhoRatio = applyEnv ? densityRatio(elevFt, airTempF) : 1.0;
+
+  let afrErr = afrM - afrT;
+
+  const mode = $("pvMode").value;
+  const vac2000 = toNum($("vac2000"));
+  const pvRating = toNum($("pvRating"));
+  let pvOpen = false;
+  if(mode==="forceOpen") pvOpen=true;
+  else if(mode==="forceClosed") pvOpen=false;
+  else pvOpen = (Number.isFinite(vac2000) && Number.isFinite(pvRating)) ? (vac2000 < pvRating) : (circuitSel==="wot");
+
+  const pvcrAdj = (Number.isFinite(pvcrDia) && pvOpen && pvcrCount>0) ? pvcrSens * (pvcrDia*1000) : 0;
+  const hsabAdj = Number.isFinite(hsabDia) ? hsabSens * (hsabDia*1000) : 0;
+
+  const afrErrAdj = afrErr - pvcrAdj + hsabAdj;
+  const dir = afrErrAdj>0 ? "Lean (need more fuel)" : afrErrAdj<0 ? "Rich (need less fuel)" : "On target";
+
+  const steps = rounding(roundingMode, afrErrAdj / sensJet);
+  const recPri1 = clamp(jetP + steps, jmin, jmax);
+  const recSec1 = jetS!=null ? clamp(jetS + steps, jmin, jmax) : null;
+
+  const mult = Math.sqrt( (afrM/afrT) * (rhoRatio||1.0) );
+  const recPri2 = clamp(rounding(roundingMode, jetP * mult), jmin, jmax);
+  const recSec2 = jetS!=null ? clamp(rounding(roundingMode, jetS * mult), jmin, jmax) : null;
+
+  const vacIdle = toNum($("vacIdle"));
+  const pv_idle_rule = Number.isFinite(vacIdle) ? (vacIdle * 2/3) : NaN;
+  const pv_cruise_rule_low = Number.isFinite(vac2000) ? (vac2000 - 2.0) : NaN;
+  const pv_cruise_rule_high = Number.isFinite(vac2000) ? (vac2000 - 1.0) : NaN;
+
+  const fmt = (n)=> Number.isFinite(n) ? `<span class="num">${n}</span>` : "—";
+  const fmt1 = (n)=> Number.isFinite(n) ? `<span class="num">${n.toFixed(1)}</span>` : "—";
+  const sig = (x)=> (x>=0?"+":"") + x.toFixed(2);
+
+  updatePvBanner();
+
+  $("results").innerHTML = `
+    <div class="row" style="align-items:center; gap:8px; margin-bottom:8px">
+      <span class="pill">AFR error: <b class="num">${afrErr.toFixed(2)}</b></span>
+      <span class="pill">Adj. error: <b class="num">${afrErrAdj.toFixed(2)}</b></span>
+      <span class="pill">${dir}</span>
+      <span class="pill">ρ ratio: <b class="num">${(rhoRatio||1).toFixed(3)}</b></span>
+      <span class="pill">PV ${pvOpen? '<span class="good">OPEN</span>':'<span class="bad">CLOSED</span>'}</span>
+    </div>
+
+    <div class="hr"></div>
+
+    <div style="margin-top:8px">
+      <b>Method 1 (Linear):</b>
+      <div>Change by <b class="num">${steps}</b> jet size(s).</div>
+      <div>Primary: ${fmt(recPri1)} ${jetS!=null?`&nbsp;•&nbsp; Secondary: ${fmt(recSec1)}`:''}</div>
+      <small>Jet sens: ${sensJet.toFixed(2)} AFR/jet • PVCR adj: ${sig(pvcrAdj)} • HSAB adj: ${sig(hsabAdj)}</small>
+    </div>
+
+    <div style="margin-top:12px">
+      <b>Method 2 (Flow/Area):</b>
+      <div>Multiplier: <b class="num">${mult.toFixed(3)}</b> (includes env.)</div>
+      <div>Primary: ${fmt(recPri2)} ${jetS!=null?`&nbsp;•&nbsp; Secondary: ${fmt(recSec2)}`:''}</div>
+    </div>
+
+    <div class="hr"></div>
+
+    <div style="margin-top:12px">
+      <b>Power Valve suggestions:</b>
+      <div>Idle rule (2/3 × idle vac): <b>${fmt1(pv_idle_rule)}</b> inHg → consider PV <b>${fmt(Math.round(pv_idle_rule))}</b></div>
+      <div>Cruise rule (2000 RPM − 1–2 inHg): <b>${fmt1(pv_cruise_rule_low)}</b>–<b>${fmt1(pv_cruise_rule_high)}</b> inHg → PV ~ <b>${fmt(Math.round((pv_cruise_rule_low+pv_cruise_rule_high)/2))}</b></div>
+      <small>Pick lower if flutter, higher for earlier enrichment. Verify on‑road.</small>
+    </div>
+  `;
+}
+
+function resetForm(){
+  ["afrMeasured","afrTarget","jetPri","jetSec","pvcrDiaIn","pvcrCount","hsabDiaIn","elevFt","airTempF","presetName","vacIdle","vac2000","pvRating"].forEach(id=>$(id).value="");
+  $("jetSens").value="0.20"; $("pvcrSens").value="-0.20"; $("hsabSens").value="+0.10";
+  $("minJet").value="40"; $("maxJet").value="99"; $("rounding").value="nearest"; $("applyEnv").value="yes"; $("circuit").value="wot"; $("pvMode").value="auto";
+  $("results").textContent = "Enter values and tap Calculate.";
+  updatePvBanner();
+  loadPresetList();
+}
+
+// Install button prompt
+let deferredPrompt=null;
+const installBtn=document.getElementById('installBtn');
+window.addEventListener('beforeinstallprompt',(e)=>{e.preventDefault();deferredPrompt=e;installBtn.style.display='inline-block';});
+installBtn.addEventListener('click', async ()=>{ if(!deferredPrompt) return; deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; installBtn.style.display='none'; });
+
+window.addEventListener("DOMContentLoaded", ()=>{ loadPresetList(); updatePvBanner(); });
+</script>
+</body>
+</html>
